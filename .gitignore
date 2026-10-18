@@ -1,0 +1,12 @@
+/build/
+/.signing/
+*.apk
+*.idsig
+*.jks
+*.keystore
+*.pyc
+__pycache__/
+local.properties
+.env
+.env.*
+.statusring-sign-password

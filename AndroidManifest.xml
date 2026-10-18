@@ -1,0 +1,11 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="io.github.statusring.myron" android:versionCode="14" android:versionName="1.0.13">
+    <uses-sdk android:minSdkVersion="36" android:targetSdkVersion="36" />
+    <queries><package android:name="com.android.systemui" /></queries>
+    <application android:label="环形三合一 · 双卡" android:icon="@drawable/icon" android:theme="@android:style/Theme.Material.NoActionBar" android:allowBackup="false" android:supportsRtl="true">
+        <activity android:name=".MainActivity" android:exported="true">
+            <intent-filter><action android:name="android.intent.action.MAIN"/><category android:name="android.intent.category.LAUNCHER"/></intent-filter>
+            <intent-filter><action android:name="android.intent.action.MAIN"/><category android:name="de.robv.android.xposed.category.MODULE_SETTINGS"/></intent-filter>
+        </activity>
+        <provider android:name="io.github.libxposed.service.XposedProvider" android:authorities="io.github.statusring.myron.XposedService" android:exported="true" />
+    </application>
+</manifest>
