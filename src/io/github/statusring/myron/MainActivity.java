@@ -33,11 +33,13 @@ public final class MainActivity extends Activity implements XposedServiceHelper.
         content=new LinearLayout(this);content.setOrientation(LinearLayout.VERTICAL);content.setPadding(dp(22),dp(16),dp(22),dp(28));scroll.addView(content);
         scroll.setOnApplyWindowInsetsListener((v,insets)->{android.graphics.Insets i=insets.getInsets(WindowInsets.Type.systemBars()|WindowInsets.Type.displayCutout());v.setPadding(i.left,i.top,i.right,i.bottom);return insets;});
         TextView title=text("环形三合一 · 双卡",27,0xffedf3fb);title.setTypeface(null,Typeface.BOLD);content.addView(title);
-        content.addView(text("REDMI K90 Pro Max  ·  澎湃 OS 3",13,0xff97aec8));
+        content.addView(text(Build.MANUFACTURER+" "+Build.MODEL+"  ·  Android "+Build.VERSION.RELEASE,13,0xff97aec8));
         status=text("框架状态：等待连接",13,0xff85d5e9);content.addView(status);
         restartButton=new Button(this);restartButton.setText("重启系统界面");restartButton.setTextSize(14);restartButton.setTextColor(0xffc0f0f8);restartButton.setAllCaps(false);restartButton.setEnabled(false);
         content.addView(restartButton,new LinearLayout.LayoutParams(-1,-2));restartButton.setOnClickListener(v->restartSystemUi());
         content.addView(text("刷新状态栏与通知栏，通常几秒后恢复。",11,0xff91a7c1));
+        Button compatibility=new Button(this);compatibility.setText("查看兼容检测");compatibility.setAllCaps(false);content.addView(compatibility);
+        compatibility.setOnClickListener(v->showCompatibility());
         preview=new Preview();content.addView(preview,new LinearLayout.LayoutParams(-1,dp(155)));
         content.addView(text("点按预览查看切换动画。充电时数字移到右侧，拔线后回到圈内下方。",12,0xff91a7c1));
         toggle("启用三合一",config.enabled,b->config.enabled=b);
@@ -54,16 +56,28 @@ public final class MainActivity extends Activity implements XposedServiceHelper.
         toggle("锁屏状态栏也使用",config.lockscreen,b->config.lockscreen=b);
         toggle("通知栏／控制中心也使用（实验）",config.panels,b->config.panels=b);
         content.addView(text("双卡规则",17,0xffedf3fb));
-        content.addView(text("A：顶部卡1，底部卡2。\nB：双卡上下两排；只有一张卡时整行居中，保留真实卡号；无卡时隐藏卡片区域并收起空位。卡号和 4G／5G 字号跟随系统网速文字。\nC：左列卡1，右列卡2。\n圆环中心仅在 Wi-Fi 连接时显示 Wi-Fi；使用流量时留空。充电时数字自动在右侧显示，底部保留单／双闪电。关闭‘始终在右侧’后，B/C 拔线时数字回到内部下方，右侧空位同时收起。\n点亮越多表示信号越强。网络制式跟随每张卡的系统读数，未知或无服务显示 —。切换上网卡不会交换卡号。",13,0xffa9bed7));
+        content.addView(text("A：顶部卡1，底部卡2，圆点大小和间距一致；两侧电量弧镜像对称。未插卡的一排隐藏，并闭合对应开口。\nB：双卡上下两排；只有一张卡时整行居中，保留真实卡号；无卡时隐藏卡片区域并收起空位。卡号和 4G／5G 字号跟随系统网速文字，接口缺失时使用默认字体。\nC：左列卡1，右列卡2。\n圆环中心仅在 Wi-Fi 连接时显示 Wi-Fi；使用流量时留空。充电时数字自动在右侧显示，内部下方保留单／双闪电。关闭‘始终在右侧’后，拔线时数字回到内部下方，右侧空位同时收起。\n点亮越多表示信号越强。B 的网络制式跟随每张卡的系统读数，未知或无服务显示 —。切换上网卡不会交换卡号。",13,0xffa9bed7));
         content.addView(text("启用方法",17,0xffedf3fb));
         content.addView(text("在 LSPosed 中启用本模块，只勾选「系统界面」。首次启用后重启作用域；以后调整上述选项即时生效。关闭总开关即可恢复系统图标。",13,0xffa9bed7));
-        content.addView(text("1.0.13 · 仅针对 myron / Android 16 核对接口\n布局参考：HyperDuo；双卡读取参考：SignalNumbers 文档。实现源码独立编写。",11,0xff7b94ae));
+        content.addView(text("1.0.14 · 按接口检测 MIUI / HyperOS；其他机型为实验兼容\n实测组合：myron / HyperOS 3 / Android 16。ColorOS、One UI 等尚无适配器。\n布局参考：HyperDuo；双卡读取参考：SignalNumbers 文档。实现源码独立编写。",11,0xff7b94ae));
         TextView project=text("GitHub 项目\n"+PROJECT_URL,12,0xff97aec8);
         project.setLinkTextColor(0xff85d5e9);android.text.util.Linkify.addLinks(project,android.text.util.Linkify.WEB_URLS);
         project.setMovementMethod(android.text.method.LinkMovementMethod.getInstance());content.addView(project);
         setContentView(scroll);creating=false;FrameworkConnection.attach(this);
     }
     @Override protected void onDestroy(){FrameworkConnection.detach(this);super.onDestroy();}
+    private void showCompatibility(){
+        SharedPreferences report=getSharedPreferences("compatibility",MODE_PRIVATE);
+        String details=report.getString("report","");
+        if(details.isEmpty())details="尚未收到系统界面的运行报告。\n请在 LSPosed 启用模块并勾选系统界面，再重启系统界面。";
+        else{
+            int boot=android.provider.Settings.Global.getInt(getContentResolver(),"boot_count",-1);
+            if(!CompatibilityProvider.VERSION.equals(report.getString("version",""))||report.getInt("boot",-2)!=boot)
+                details="这是上次运行的记录，请重启系统界面获取当前检测结果。\n\n"+details;
+            details+="\n记录时间："+android.text.format.DateFormat.format("yyyy-MM-dd HH:mm:ss",report.getLong("time",0));
+        }
+        new android.app.AlertDialog.Builder(this).setTitle("兼容检测 · SystemUI 实际报告").setMessage(details).setPositiveButton("关闭",null).show();
+    }
     private interface BoolSetter{void put(boolean value);}
     private void restartSystemUi(){
         if(!canRestart()){Toast.makeText(this,"请先在 LSPosed 启用模块并勾选系统界面",Toast.LENGTH_LONG).show();return;}

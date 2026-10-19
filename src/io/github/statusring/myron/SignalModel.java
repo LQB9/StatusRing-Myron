@@ -6,8 +6,13 @@ public final class SignalModel {
     public final String[] types={"",""};
     public int dataSlot=-1, battery=-1, wifiLevel=0;
     public boolean wifi=false, charging=false, fastCharging=false, airplane=false;
+    public SignalModel copy(){
+        SignalModel m=new SignalModel();System.arraycopy(levels,0,m.levels,0,2);System.arraycopy(types,0,m.types,0,2);
+        m.dataSlot=dataSlot;m.battery=battery;m.wifiLevel=wifiLevel;m.wifi=wifi;m.charging=charging;m.fastCharging=fastCharging;m.airplane=airplane;return m;
+    }
     public int chargeBoltCount(){return !charging?0:fastCharging?2:1;}
     public int presentCount(){return (levels[0]!=-2?1:0)+(levels[1]!=-2?1:0);}
+    public boolean signalsKnown(){return (levels[0]==-2||levels[0]>=0)&&(levels[1]==-2||levels[1]>=0);}
     public String type(){return dataSlot>=0&&dataSlot<2?types[dataSlot]:"";}
     public String typeForSlot(int slot){
         if(slot<0||slot>=2||levels[slot]==-2||airplane)return "—";

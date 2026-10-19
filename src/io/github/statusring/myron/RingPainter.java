@@ -36,7 +36,7 @@ public final class RingPainter {
     private float rightOffset(Config c,boolean hasNetworkType){
         if(hasNetworkType)return 6;
         if(c.style==1)return 4.5f*c.weight/100f;
-        if(c.style==0)return 15.25f;
+        if(c.style==0)return 2+4.5f*c.weight/100f;
         return 1+4.4f*c.weight/100f;
     }
     private float percentWidth(Config c,boolean hasNetworkType){
@@ -69,7 +69,7 @@ public final class RingPainter {
             ink=color|0xff000000;dim=(ink&0x00ffffff)|0x48000000;weight=cfg.weight/100f;
             accent=!cfg.colors?ink:s.charging?Color.rgb(49,190,125):s.battery>=0&&s.battery<=20?Color.rgb(230,96,67):ink;
             p.setTypeface(boldFace);
-            if(cfg.style==0)compact(c,s);else if(cfg.style==1)external(c,s,cfg,position);else rectangular(c,s,cfg,position);
+            if(cfg.style==0)compact(c,s,position);else if(cfg.style==1)external(c,s,cfg,position);else rectangular(c,s,cfg,position);
             float x=baseWidth(cfg,s);
             if(cfg.networkType&&cfg.style!=1&&s.presentCount()>0){label(c,s.type(),x+networkWidth()/2,64);x+=networkWidth();}
             batteryNumber(c,s,cfg,x,position);
@@ -80,14 +80,14 @@ public final class RingPainter {
         String number=s.battery<0?"—":s.battery+"";
         // One glyph fades out with a short slide, then enters at the other anchor.
         // The invisible midpoint avoids crossing the Wi-Fi or charging lightning.
-        if(cfg.style!=0&&position<.5f){
+        if(position<.5f){
             float away=position*2;
-            float x=(cfg.style==1?ringCenter(s):60)+12*away;
-            txt(c,number,x,cfg.style==1?111:101,cfg.batteryText,opacity(accent,1-away));
+            float x=(cfg.style==1?ringCenter(s):60)+(cfg.style==0?0:12*away);
+            txt(c,number,x,cfg.style==1?111:cfg.style==0?95+2*away:101,cfg.batteryText,opacity(accent,1-away));
         }else if(position>.5f){
             float arrived=(position-.5f)*2;
             p.setTextSize(cfg.rightBatteryText);Paint.FontMetrics metrics=p.getFontMetrics();
-            float centerY=cfg.style==1?57:cfg.style==0?59:60;
+            float centerY=cfg.style==1?57:cfg.style==0?66:60;
             p.getTextBounds(number,0,number.length(),numberBounds);
             p.setStyle(Paint.Style.FILL);p.setTextAlign(Paint.Align.LEFT);p.setColor(opacity(accent,arrived));
             boolean extra=cfg.networkType&&cfg.style!=1&&s.presentCount()>0;
@@ -124,20 +124,29 @@ public final class RingPainter {
             circle(c,x,y+26,3.4f,s.wifiLevel>=1?ink:dim);
         }
     }
-    private void row(Canvas c,SignalModel s,int slot,float y,boolean upper){
+    private void row(Canvas c,SignalModel s,int slot,float y){
         if(s.levels[slot]==-2)return;
         for(int i=0;i<4;i++){
-            float yy=y+((i==1||i==2)?(upper?-6:6):0);
-            circle(c,(upper?38:34)+i*(upper?14.7f:17.3f),yy,4.2f,s.levels[slot]>i&&!s.airplane?ink:dim);
+            circle(c,33+i*18,y,4.8f,s.levels[slot]>i&&!s.airplane?ink:dim);
         }
-        if(s.levels[slot]<0)txt(c,"?",103,y+4,11,ink);
+        if(s.levels[slot]<0)txt(c,"?",106,y+4,12,ink);
     }
-    private void compact(Canvas c,SignalModel s){
-        boolean dual=s.levels[0]!=-2&&s.levels[1]!=-2;
-        batteryArc(c,60,59,s,dual);wifi(c,60,55,s);
-        if(dual){row(c,s,0,19,true);row(c,s,1,104,false);}
-        else{int slot=s.levels[0]!=-2?0:1;row(c,s,slot,104,false);}
-        chargeMark(c,s,105,46,.75f);
+    private void compact(Canvas c,SignalModel s,float position){
+        float fraction=s.battery<0?0:Config.clamp(s.battery,0,100)/100f;
+        if(s.presentCount()==2){
+            // Matching top/bottom mouths and mirrored side arcs leave equal dot clearance.
+            arc(c,60,66,46,315,90,dim,9);arc(c,60,66,46,135,90,dim,9);
+            arc(c,60,66,46,315,90*fraction,accent,9);
+            arc(c,60,66,46,225-90*fraction,90*fraction,accent,9);
+        }else{
+            // Close unused mouths; a lone SIM stays in its physical slot's row.
+            float start=s.levels[0]!=-2?315:s.levels[1]!=-2?135:270;
+            float sweep=s.presentCount()==0?360:270;
+            arc(c,60,66,46,start,sweep,dim,9);arc(c,60,66,46,start,sweep*fraction,accent,9);
+        }
+        row(c,s,0,15);row(c,s,1,117);
+        c.save();c.translate(60,37);c.scale(.85f,.85f);wifi(c,0,0,s);c.restore();
+        if(s.charging)chargeMark(c,s,60,74,1.2f,Math.max(0,position*2-1));
     }
     private void external(Canvas c,SignalModel s,Config cfg,float position){
         int count=s.presentCount();

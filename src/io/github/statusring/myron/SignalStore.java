@@ -27,7 +27,7 @@ public final class SignalStore {
     private boolean started;
     private int generation;
 
-    public SignalStore(Context c,Runnable listener){context=c.getApplicationContext();changed=listener;}
+    public SignalStore(Context c,Runnable listener){Context app=c.getApplicationContext();context=app==null?c:app;changed=listener;}
     private void update(){changed.run();}
     public void start(){
         if(started)return;started=true;
@@ -43,7 +43,7 @@ public final class SignalStore {
             filter.addAction(WifiManager.NETWORK_STATE_CHANGED_ACTION);
             filter.addAction(WifiManager.RSSI_CHANGED_ACTION);
             filter.addAction("android.intent.action.ACTION_DEFAULT_DATA_SUBSCRIPTION_CHANGED");
-            Intent sticky=context.registerReceiver(new BroadcastReceiver(){
+            BroadcastReceiver receiver=new BroadcastReceiver(){
                 @Override public void onReceive(Context c,Intent i){
                     if(Intent.ACTION_BATTERY_CHANGED.equals(i.getAction())){
                         int scale=i.getIntExtra(BatteryManager.EXTRA_SCALE,100);
@@ -54,10 +54,18 @@ public final class SignalStore {
                     }
                     refreshAirplane();refreshWifi();refreshDataSlot();update();
                 }
-            },filter,Context.RECEIVER_EXPORTED);
+            };
+            if(Build.VERSION.SDK_INT>=33)context.registerReceiver(receiver,filter,Context.RECEIVER_EXPORTED);
+            else context.registerReceiver(receiver,filter);
+        }catch(Throwable t){Log.e("StatusRing","Battery/network broadcasts unavailable",t);}
+        try{
+            if(subscriptions==null)throw new IllegalStateException("SubscriptionManager unavailable");
             subscriptions.addOnSubscriptionsChangedListener(context.getMainExecutor(),new SubscriptionManager.OnSubscriptionsChangedListener(){
                 @Override public void onSubscriptionsChanged(){rebuildSubscriptions();}
             });
+        }catch(Throwable t){Log.e("StatusRing","Subscription change listener unavailable",t);}
+        try{
+            if(connectivity==null)throw new IllegalStateException("ConnectivityManager unavailable");
             connectivity.registerNetworkCallback(new NetworkRequest.Builder().addTransportType(NetworkCapabilities.TRANSPORT_WIFI).build(),new ConnectivityManager.NetworkCallback(){
                 @Override public void onAvailable(Network n){main.post(()->{refreshWifi();update();});}
                 @Override public void onLost(Network n){main.post(()->{refreshWifi();update();});}
@@ -67,14 +75,14 @@ public final class SignalStore {
                     main.post(()->{refreshWifi();update();});
                 }
             },main);
-            refreshAirplane();refreshWifi();rebuildSubscriptions();
-        }catch(Throwable t){ready=false;Log.e("StatusRing","Cannot initialize real signal state; stock icons retained",t);}
+        }catch(Throwable t){Log.e("StatusRing","Wi-Fi change listener unavailable",t);}
+        refreshAirplane();refreshWifi();rebuildSubscriptions();
     }
     private void refreshAirplane(){
-        model.airplane=Settings.Global.getInt(context.getContentResolver(),Settings.Global.AIRPLANE_MODE_ON,0)!=0;
+        try{model.airplane=Settings.Global.getInt(context.getContentResolver(),Settings.Global.AIRPLANE_MODE_ON,0)!=0;}catch(RuntimeException ignored){}
     }
     private void refreshDataSlot(){
-        dataSubscription=SubscriptionManager.getDefaultDataSubscriptionId();model.dataSlot=-1;
+        try{dataSubscription=SubscriptionManager.getDefaultDataSubscriptionId();}catch(RuntimeException ignored){dataSubscription=-1;}model.dataSlot=-1;
         for(Registration r:registrations)if(r.id==dataSubscription)model.dataSlot=r.slot;
     }
     private void refreshWifi(){
@@ -89,8 +97,10 @@ public final class SignalStore {
                     model.wifi=true;
                     TransportInfo transport=caps.getTransportInfo();
                     WifiInfo info=transport instanceof WifiInfo?(WifiInfo)transport:wifi.getConnectionInfo();
-                    if(info!=null&&info.getRssi()>-127)model.wifiLevel=WifiManager.calculateSignalLevel(info.getRssi(),5);
-                    break;
+                    if(info==null||info.getRssi()<=-127||info.getRssi()>=0)info=wifi.getConnectionInfo();
+                    if(info!=null&&info.getRssi()>-127&&info.getRssi()<0){model.wifiLevel=WifiManager.calculateSignalLevel(info.getRssi(),5);wifiKnown=true;}
+                    // A known connection with a redacted/unknown RSSI must keep the native icon.
+                    return;
                 }
             }
             wifiKnown=true;

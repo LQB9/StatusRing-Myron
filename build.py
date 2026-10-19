@@ -31,7 +31,7 @@ cp=os.pathsep.join(map(str,[ANDROID,api,interface,service]))
 exe='.exe' if os.name=='nt' else '';bat='.bat' if os.name=='nt' else ''
 run([JDK/('bin/javac'+exe),'--release','8','-encoding','UTF-8','-classpath',cp,'-d',OUT/'classes',*sorted((ROOT/'src').rglob('*.java'))])
 run([JDK/('bin/jar'+exe),'cf',OUT/'classes.jar','-C',OUT/'classes','.'])
-run([BT/('d8'+bat),'--release','--min-api','36','--lib',ANDROID,'--lib',api,'--output',OUT/'dex',OUT/'classes.jar',interface,service])
+run([BT/('d8'+bat),'--release','--min-api','31','--lib',ANDROID,'--lib',api,'--output',OUT/'dex',OUT/'classes.jar',interface,service])
 run([BT/('aapt2'+exe),'compile','--dir',ROOT/'res','-o',OUT/'resources.zip'])
 run([BT/('aapt2'+exe),'link','-o',OUT/'unsigned.apk','-I',ANDROID,'--manifest',ROOT/'AndroidManifest.xml',OUT/'resources.zip'])
 with zipfile.ZipFile(OUT/'unsigned.apk','a',compression=zipfile.ZIP_DEFLATED) as z:
@@ -44,7 +44,7 @@ if not key.exists():
     env['STATUSRING_SIGN_PASSWORD']=password
     run([JDK/('bin/keytool'+exe),'-genkeypair','-keystore',key,'-alias','statusring','-storepass:env','STATUSRING_SIGN_PASSWORD','-keypass:env','STATUSRING_SIGN_PASSWORD','-keyalg','RSA','-keysize','3072','-validity','10000','-dname','CN=StatusRing Personal Development'])
 env['STATUSRING_SIGN_PASSWORD']=passfile.read_text(encoding='utf-8').strip()
-apk=OUT/'StatusRing-Myron-v1.0.13.apk'
+apk=OUT/'StatusRing-Myron-v1.0.14.apk'
 run([BT/('apksigner'+bat),'sign','--ks',key,'--ks-pass','env:STATUSRING_SIGN_PASSWORD','--key-pass','env:STATUSRING_SIGN_PASSWORD','--out',apk,OUT/'aligned.apk'])
 run([BT/('apksigner'+bat),'verify','--verbose','--print-certs',apk])
 run([BT/('zipalign'+exe),'-c','-v','4',apk])

@@ -17,6 +17,15 @@ public final class SelfCheck {
             Config options=new Config();require(options.accepts(0)&&options.accepts(1)&&!options.accepts(3),"AOD remains stock");checks++;
             options.enabled=false;require(!options.accepts(0),"Disabled restores stock");checks++;
             RingPainter painter=new RingPainter();
+            for(int weight:new int[]{75,140})for(int level=0;level<=4;level++){
+                Config cfg=new Config();cfg.style=0;cfg.weight=weight;
+                SignalModel sample=SignalModel.demo();sample.levels[0]=level;sample.levels[1]=level;
+                Bitmap image=render(painter,cfg,sample);
+                for(int y=7;y<=23;y++)for(int x=24;x<=96;x++)require(image.getPixel(x,y)==image.getPixel(x,y+102),"A dual-SIM rows are not identical: weight="+weight+" level="+level);
+                for(int y=23;y<=24;y++)for(int x=24;x<=96;x++)require(Color.alpha(image.getPixel(x,y))==0,"A upper dots touch Wi-Fi or ring");
+                for(int x=24;x<=96;x++)require(Color.alpha(image.getPixel(x,108))==0,"A lower dots touch ring or number");
+                checks++;image.recycle();
+            }
             for(int weight:new int[]{75,100,140}){
                 Config cfg=new Config();cfg.weight=weight;SignalModel full=SignalModel.demo();full.levels[0]=4;full.levels[1]=4;
                 Bitmap image=Bitmap.createBitmap(328,132,Bitmap.Config.ARGB_8888);painter.draw(new Canvas(image),328,132,full,cfg,Color.WHITE);
@@ -92,9 +101,9 @@ public final class SelfCheck {
                 forced.recycle();cfg.percent=false;model.charging=false;model.fastCharging=true;
                 Bitmap returned=render(painter,cfg,model);
                 require(!painter.externalPercent(cfg,model)&&returned.sameAs(unplugged),"Unplug did not restore exact original layout, style="+style);checks++;
-                if(style!=0){
+                {
                     model.battery=7;Bitmap lowerSeven=render(painter,cfg,model);
-                    int cx=style==1?(int)painter.ringCenter(model):60,top=style==1?95:87;
+                    int cx=style==1?(int)painter.ringCenter(model):60,top=style==1?95:style==0?72:87;
                     Bitmap lowerHundred=Bitmap.createBitmap(returned,cx-35,top,70,25);
                     Bitmap lowerNumber=Bitmap.createBitmap(lowerSeven,cx-35,top,70,25);
                     require(!lowerHundred.sameAs(lowerNumber),"Unplugged number missing below inner Wi-Fi, style="+style);checks++;
@@ -112,7 +121,7 @@ public final class SelfCheck {
                 Paint measure=new Paint(Paint.ANTI_ALIAS_FLAG);measure.setTypeface(Typeface.create("sans-serif",Typeface.BOLD));measure.setTextSize(cfg.rightBatteryText);
                 require(measure.measureText("100")+12<painter.logicalWidth(cfg,model)-start,"Maximum right-hand font clips a three-digit number");checks++;
             }
-            for(int style:new int[]{1,2})for(int height:new int[]{48,84}){
+            for(int style:new int[]{0,1,2})for(int height:new int[]{48,84}){
                 RingPainter moving=new RingPainter();moving.setLabelStyle(21*132f/height,Typeface.create("sans-serif",Typeface.BOLD));
                 Config cfg=new Config();cfg.style=style;cfg.batteryText=40;cfg.rightBatteryText=56;
                 SignalModel model=SignalModel.demo();model.charging=true;model.fastCharging=true;model.battery=100;
@@ -189,10 +198,31 @@ public final class SelfCheck {
             saveBPreview(c,painter);
             saveCardPreview(c,painter);
             saveChargePreview(c,painter);
-            String result="PASS "+checks+" checks\n右侧电量独立放大；最大字号三位数与动画中间帧不裁切\n自动换位、拔线恢复、流量留空、单卡居中、无卡隐藏、单双闪电检查完成\n这是应用内示例绘制检查，SystemUI 实际注入另外验证。";
+            saveAPreview(c,painter);
+            saveAPreview(c,painter,"A-stress-preview.png",100,140);
+            String result="v1.0.14 PASS "+checks+" checks\nA 上下圆点统一、圈内电量恢复；最大字号与动画中间帧不裁切\n自动换位、拔线恢复、流量留空、单卡居中、无卡隐藏、单双闪电检查完成\n这是应用内示例绘制检查，SystemUI 实际注入另外验证。";
             try(FileOutputStream f=new FileOutputStream(new File(c.getFilesDir(),"selfcheck.txt"))){f.write(result.getBytes("UTF-8"));}
             Log.i("StatusRingTest",result);return result;
-        }catch(Throwable error){Log.e("StatusRingTest","FAILED",error);return "FAILED: "+error;}
+        }catch(Throwable error){Log.e("StatusRingTest","FAILED",error);String failed="v1.0.14 FAILED: "+error;try(FileOutputStream f=new FileOutputStream(new File(c.getFilesDir(),"selfcheck.txt"))){f.write(failed.getBytes("UTF-8"));}catch(IOException ignored){}return failed;}
+    }
+    private static void saveAPreview(Context context,RingPainter painter)throws IOException{
+        saveAPreview(context,painter,"A-refined-preview.png",86,120);
+    }
+    private static void saveAPreview(Context context,RingPainter painter,String filename,int battery,int weight)throws IOException{
+        Bitmap image=Bitmap.createBitmap(1280,970,Bitmap.Config.ARGB_8888);Canvas canvas=new Canvas(image);canvas.drawColor(0xff0b111b);
+        Paint text=new Paint(Paint.ANTI_ALIAS_FLAG);text.setColor(0xffedf3fb);text.setTextSize(40);canvas.drawText("A · 对称圆环精修",60,76,text);
+        text.setTextSize(24);text.setColor(0xff9eb6d0);canvas.drawText("上下四圆点一致 · 两侧电量弧对称 · 数字自动换位",60,125,text);
+        String[] labels={"双卡 · Wi-Fi · 未充电","双卡 · 普通充电","双卡 · 快速充电","双卡 · 流量留空","仅卡2 · 保留物理位置","无卡 · 收起信号圆点"};
+        for(int i=0;i<6;i++){
+            Config cfg=new Config();cfg.style=0;cfg.weight=weight;cfg.batteryText=40;
+            SignalModel sample=SignalModel.demo();sample.battery=battery;sample.charging=i==1||i==2;sample.fastCharging=i==2;
+            if(i==3)sample.wifi=false;if(i==4)sample.levels[0]=-2;if(i==5){sample.levels[0]=-2;sample.levels[1]=-2;}
+            float x=60+(i%3)*410,y=195+(i/3)*350,h=230,w=painter.logicalWidth(cfg,sample)*h/132;
+            canvas.save();canvas.translate(x+(350-w)/2,y);painter.draw(canvas,w,h,sample,cfg,Color.WHITE);canvas.restore();
+            text.setTextSize(22);text.setColor(0xffa9bed7);canvas.drawText(labels[i],x,y+280,text);
+        }
+        text.setTextSize(21);text.setColor(0xff839bb7);canvas.drawText("APK 原生 Canvas 示例绘制；读数为示例，非真实网络／充电截图。",60,935,text);
+        try(FileOutputStream stream=new FileOutputStream(new File(context.getFilesDir(),filename))){image.compress(Bitmap.CompressFormat.PNG,100,stream);}image.recycle();
     }
     private static Bitmap render(RingPainter painter,Config cfg,SignalModel model){
         int width=(int)Math.ceil(painter.logicalWidth(cfg,model));

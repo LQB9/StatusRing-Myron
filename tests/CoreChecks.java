@@ -1,9 +1,28 @@
 import io.github.statusring.myron.Config;
 import io.github.statusring.myron.SignalModel;
 import io.github.statusring.myron.BatteryMotion;
+import io.github.statusring.myron.SystemUiContracts;
 
 public class CoreChecks {
     static int passed;
+    public static class CoreMeter {
+        public int mLevel;
+        protected void onAttachedToWindow(){} protected void onDetachedFromWindow(){}
+        protected void onMeasure(int a,int b){} protected void onLayout(boolean a,int b,int c,int d,int e){}
+    }
+    public static class InheritedMeter extends CoreMeter {}
+    public static class FullMeter extends CoreMeter {
+        public boolean mCharging,mQuickCharging,mStoreIsAddBatteryIsland,mByIsAddBatteryIslandTrigger,mHomeBlock,mMinimalism;
+        public void updateIslandChanged(boolean a,boolean b){}
+    }
+    public static class PartialIsland extends CoreMeter {public void updateIslandChanged(boolean a,boolean b){}}
+    public static class WrongLevel extends CoreMeter {public String mLevel;}
+    public static class RenamedSpeed {
+        public Object mNetworkSpeedNumberText;
+        public void updateResources$7(){} public void updateResources(){}
+        public void updateResources(int a){} public void updateResourcesWrong(){}
+    }
+    public static class SlotView {final String slot;SlotView(String s){slot=s;}public String getSlot(){return slot;}}
     static void check(boolean ok,String message){if(!ok)throw new AssertionError(message);passed++;}
     public static void main(String[] args){
         SignalModel model=SignalModel.demo();
@@ -62,6 +81,24 @@ public class CoreChecks {
         check(motion.valueAt(1100)==0&&!motion.isRunning(1100),"Disabled or hidden animations snap to their target");
         BatteryMotion initialCharge=new BatteryMotion();initialCharge.setTarget(true,0,true);
         check(initialCharge.valueAt(0)==1&&!initialCharge.isRunning(0),"Booting while charging does not play a fake plug animation");
+        SystemUiContracts minimal=new SystemUiContracts(CoreMeter.class,null,null,null);
+        check(minimal.coreReady(),"Battery rendering survives missing optional signal/font/charging contracts");
+        check(!minimal.fastCharging&&!minimal.font&&minimal.island==null,"Missing features remain explicitly unavailable");
+        check(new SystemUiContracts(InheritedMeter.class,null,null,null).coreReady(),"Vendor superclass lifecycle methods are supported");
+        check(!new SystemUiContracts(WrongLevel.class,null,null,null).coreReady(),"A wrong-type battery field rejects takeover");
+        check(!new SystemUiContracts(null,null,null,null).coreReady(),"Non-MIUI systems without a host stay native");
+        SystemUiContracts full=new SystemUiContracts(FullMeter.class,null,null,RenamedSpeed.class);
+        check(full.coreReady()&&full.fastCharging&&full.charging&&full.island!=null,"Full charging-island path needs every restoration contract");
+        check(full.font&&full.fontUpdates.size()==2,"Plain and compiler-suffixed no-arg resource callbacks are accepted");
+        SystemUiContracts partial=new SystemUiContracts(PartialIsland.class,null,null,null);
+        check(partial.coreReady()&&partial.island==null,"An incomplete island path cannot disable battery rendering or be overridden");
+        check(SystemUiContracts.signalKind(new SlotView("stacked_mobile")).equals("mobile"),"Compose stacked-mobile slot is recognised");
+        check(SystemUiContracts.signalKind(new SlotView("wifi")).equals("wifi"),"The same view class can carry a different slot");
+        check(SystemUiContracts.signalKind(new SlotView("alarm_clock")).isEmpty(),"Unrelated status icons are never hidden");
+        SignalModel source=SignalModel.demo(),copy=source.copy();copy.levels[0]=-2;copy.types[1]="";copy.wifi=false;
+        check(source.levels[0]==3&&source.types[1].equals("4G")&&source.wifi,"Per-host fallback never changes another host's real snapshot");
+        source.levels[1]=-1;check(!source.signalsKnown(),"A subscribed SIM with no reading must retain native cellular icons");
+        source.levels[1]=-2;check(source.signalsKnown(),"An absent SIM does not block the remaining readable SIM");
         System.out.println("PASS "+passed+" behavior checks");
     }
 }
